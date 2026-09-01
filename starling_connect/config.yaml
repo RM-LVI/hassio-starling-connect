@@ -1,5 +1,5 @@
 name: Starling Connect Bridge
-version: "0.2.0"
+version: "0.2.1"
 slug: starling_connect
 description: >-
   Bridge a Starling Home Hub (Developer Connect API) into Home Assistant via

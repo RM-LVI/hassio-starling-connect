@@ -190,7 +190,8 @@ function discLock(dev) {
   const uid = `${NS}_${dev.id}_lock`;
   const cfg = {
     unique_id: uid,
-    has_entity_name: true, // no name -> takes the device (lock) name
+    has_entity_name: true,
+    name: 'Lock', // "<device> Lock" e.g. "Garage Door Lock"
     state_topic: `${NS}/${dev.id}/currentState`,
     command_topic: `${NS}/${dev.id}/set/lock`,
     payload_lock: 'LOCK',
@@ -264,7 +265,9 @@ function buildDeviceDiscovery(d, p) {
       discSensor(d, 'lastLockUnlockMethod', 'Last Unlock Method', { entity_category: 'diagnostic' });
     }
   } else if (d.type === 'home_away_control') {
-    discBinary(d, 'homeState', null, { device_class: 'occupancy' });
+    // No name / no device_class so the entity reads exactly as the device name
+    // (e.g. "Duncan - Home Occupied") instead of appending "Occupancy".
+    discBinary(d, 'homeState', null);
   } else {
     log('debug', `no mapping for device type '${d.type}' (${d.name})`);
   }
