@@ -1,10 +1,11 @@
 name: Starling Connect Bridge
-version: "0.1.1"
+version: "0.2.0"
 slug: starling_connect
 description: >-
-  Read-only bridge from a Starling Home Hub (Developer Connect API) into Home
-  Assistant via MQTT discovery: doorbell press, camera online status, lock
-  state and battery, and home/away.
+  Bridge a Starling Home Hub (Developer Connect API) into Home Assistant via
+  MQTT discovery: doorbell press, motion/person/animal/vehicle/package, face
+  identity, zone activity, camera online + controls (enable, quiet-time),
+  locks (state/battery/lock-unlock), and home/away.
 url: "https://github.com/RM-LVI/hassio-starling-connect"
 arch:
   - aarch64
