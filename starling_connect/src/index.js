@@ -28,6 +28,12 @@ const PREFIX = String(OPTIONS.discovery_prefix || 'homeassistant').trim() || 'ho
 const FAST_MS = Math.max(1, Number(OPTIONS.doorbell_poll_seconds) || 1) * 1000;
 const SLOW_MS = Math.max(5, Number(OPTIONS.slow_poll_seconds) || 60) * 1000;
 const SUP = process.env.SUPERVISOR_TOKEN;
+// Camera names to exclude from the "Cameras Offline" aggregate (e.g. spares).
+const EXCLUDE = new Set(
+  (Array.isArray(OPTIONS.offline_exclude) ? OPTIONS.offline_exclude : [])
+    .map((s) => String(s).trim())
+    .filter(Boolean)
+);
 
 if (!HUB || !KEY) {
   log('error', 'hub_host and api_key are required in the add-on configuration.');
@@ -222,10 +228,41 @@ function discBridge() {
       device: bridgeDevice,
     })
   );
+
+  const offUid = `${NS}_bridge_cameras_offline`;
+  pub(
+    `${PREFIX}/binary_sensor/${offUid}/config`,
+    JSON.stringify({
+      name: 'Cameras Offline',
+      has_entity_name: true,
+      unique_id: offUid,
+      state_topic: `${NS}/bridge/camerasOffline`,
+      payload_on: 'true',
+      payload_off: 'false',
+      ...AVAIL_FIELDS,
+      device_class: 'problem',
+      device: bridgeDevice,
+    })
+  );
+
+  const listUid = `${NS}_bridge_offline_cameras`;
+  pub(
+    `${PREFIX}/sensor/${listUid}/config`,
+    JSON.stringify({
+      name: 'Offline Cameras',
+      has_entity_name: true,
+      unique_id: listUid,
+      state_topic: `${NS}/bridge/offlineList`,
+      ...AVAIL_FIELDS,
+      icon: 'mdi:cctv-off',
+      device: bridgeDevice,
+    })
+  );
 }
 
 // ---------- discovery ----------
 const knownDevices = new Map(); // id -> {id,name,type}
+const camOnline = new Map(); // id -> { name, online }  (cameras only, for the offline aggregate)
 let doorbellIds = new Set();
 
 function buildDeviceDiscovery(d, p) {
@@ -294,6 +331,9 @@ async function buildDiscovery() {
 
 // ---------- state ----------
 function publishAll(dev, p) {
+  if (dev.type === 'cam' && 'isOnline' in p) {
+    camOnline.set(dev.id, { name: dev.name, online: !!p.isOnline });
+  }
   for (const [k, v] of Object.entries(p)) {
     if (META.has(k)) continue;
     const tk = topicKeyFor(k);
@@ -302,6 +342,15 @@ function publishAll(dev, p) {
   if ('batteryStatus' in p) {
     pub(`${NS}/${dev.id}/batteryLow`, p.batteryStatus === 'low' ? 'true' : 'false');
   }
+}
+
+function publishOfflineAggregate() {
+  const offline = [...camOnline.values()]
+    .filter((c) => !c.online && !EXCLUDE.has(c.name))
+    .map((c) => c.name)
+    .sort();
+  pub(`${NS}/bridge/camerasOffline`, offline.length > 0 ? 'true' : 'false');
+  pub(`${NS}/bridge/offlineList`, offline.length ? offline.join(', ') : 'none');
 }
 
 async function refreshDevice(id) {
@@ -326,6 +375,7 @@ async function slowPoll() {
     } catch (e) {
       log('debug', `status poll: ${e.message}`);
     }
+    publishOfflineAggregate();
     pub(AVAIL, 'online');
   } catch (e) {
     log('error', `slow poll failed (hub unreachable?): ${e.message}`);

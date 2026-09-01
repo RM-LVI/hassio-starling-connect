@@ -1,5 +1,5 @@
 name: Starling Connect Bridge
-version: "0.2.2"
+version: "0.3.0"
 slug: starling_connect
 description: >-
   Bridge a Starling Home Hub (Developer Connect API) into Home Assistant via
@@ -24,6 +24,7 @@ options:
   doorbell_poll_seconds: 1
   slow_poll_seconds: 60
   discovery_prefix: homeassistant
+  offline_exclude: []
   log_level: info
 schema:
   hub_host: str
@@ -31,4 +32,6 @@ schema:
   doorbell_poll_seconds: int(1,)
   slow_poll_seconds: int(5,)
   discovery_prefix: str?
+  offline_exclude:
+    - str
   log_level: "list(trace|debug|info|warning|error)?"
