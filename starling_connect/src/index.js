@@ -78,12 +78,14 @@ function deviceBlock(dev) {
   };
 }
 
+// name is the ROLE only (e.g. "Online"); has_entity_name lets HA compose
+// "<device name> <role>" so names never double up. Pass a falsy name to make
+// the entity take the device name verbatim (single-feature devices).
 function discBinary(dev, key, name, extra = {}) {
   const uid = `${NS}_${dev.id}_${key}`;
   const cfg = {
-    name,
     unique_id: uid,
-    object_id: uid,
+    has_entity_name: true,
     state_topic: `${NS}/${dev.id}/${key}`,
     payload_on: 'true',
     payload_off: 'false',
@@ -93,15 +95,15 @@ function discBinary(dev, key, name, extra = {}) {
     device: deviceBlock(dev),
     ...extra,
   };
+  if (name) cfg.name = name;
   pub(`${PREFIX}/binary_sensor/${uid}/config`, JSON.stringify(cfg));
 }
 
 function discSensor(dev, key, name, extra = {}) {
   const uid = `${NS}_${dev.id}_${key}`;
   const cfg = {
-    name,
     unique_id: uid,
-    object_id: uid,
+    has_entity_name: true,
     state_topic: `${NS}/${dev.id}/${key}`,
     availability_topic: AVAIL,
     payload_available: 'online',
@@ -109,6 +111,7 @@ function discSensor(dev, key, name, extra = {}) {
     device: deviceBlock(dev),
     ...extra,
   };
+  if (name) cfg.name = name;
   pub(`${PREFIX}/sensor/${uid}/config`, JSON.stringify(cfg));
 }
 
@@ -117,9 +120,9 @@ function discBridge() {
   pub(
     `${PREFIX}/binary_sensor/${uid}/config`,
     JSON.stringify({
-      name: 'Starling Hub Connected to Nest',
+      name: 'Connected to Nest',
+      has_entity_name: true,
       unique_id: uid,
-      object_id: uid,
       state_topic: `${NS}/bridge/connectedToNest`,
       payload_on: 'true',
       payload_off: 'false',
@@ -153,32 +156,33 @@ async function buildDiscovery() {
     knownDevices.set(d.id, d);
 
     if (d.type === 'cam') {
-      discBinary(d, 'isOnline', `${d.name} Online`, {
+      discBinary(d, 'isOnline', 'Online', {
         device_class: 'connectivity',
         entity_category: 'diagnostic',
       });
       if ('doorbellPushed' in p) {
         nextDoorbells.add(d.id);
-        discBinary(d, 'doorbellPushed', `${d.name} Doorbell`);
+        discBinary(d, 'doorbellPushed', 'Doorbell');
       }
     } else if (d.type === 'lock') {
-      discSensor(d, 'currentState', `${d.name} State`);
-      discSensor(d, 'batteryLevel', `${d.name} Battery`, {
+      discSensor(d, 'currentState', 'State');
+      discSensor(d, 'batteryLevel', 'Battery', {
         device_class: 'battery',
         unit_of_measurement: '%',
         state_class: 'measurement',
         entity_category: 'diagnostic',
       });
-      discBinary(d, 'batteryLow', `${d.name} Battery Low`, {
+      discBinary(d, 'batteryLow', 'Battery Low', {
         device_class: 'battery',
         entity_category: 'diagnostic',
       });
-      discBinary(d, 'isOnline', `${d.name} Online`, {
+      discBinary(d, 'isOnline', 'Online', {
         device_class: 'connectivity',
         entity_category: 'diagnostic',
       });
     } else if (d.type === 'home_away_control') {
-      discBinary(d, 'homeState', `${d.name}`, { device_class: 'occupancy' });
+      // Single-feature device — omit role so it takes the device name.
+      discBinary(d, 'homeState', null, { device_class: 'occupancy' });
     } else {
       log('debug', `no v1 mapping for device type '${d.type}' (${d.name})`);
     }
