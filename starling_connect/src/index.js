@@ -265,9 +265,9 @@ function buildDeviceDiscovery(d, p) {
       discSensor(d, 'lastLockUnlockMethod', 'Last Unlock Method', { entity_category: 'diagnostic' });
     }
   } else if (d.type === 'home_away_control') {
-    // No name / no device_class so the entity reads exactly as the device name
-    // (e.g. "Duncan - Home Occupied") instead of appending "Occupancy".
-    discBinary(d, 'homeState', null);
+    // device_class gives a sane default label ("… Occupancy"); avoids the
+    // "MQTT Binary sensor" fallback that a bare no-name entity would get.
+    discBinary(d, 'homeState', null, { device_class: 'occupancy' });
   } else {
     log('debug', `no mapping for device type '${d.type}' (${d.name})`);
   }
