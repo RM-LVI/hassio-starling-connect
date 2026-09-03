@@ -253,6 +253,7 @@ function discBridge() {
       has_entity_name: true,
       unique_id: listUid,
       state_topic: `${NS}/bridge/offlineList`,
+      json_attributes_topic: `${NS}/bridge/offlineAttrs`,
       ...AVAIL_FIELDS,
       icon: 'mdi:cctv-off',
       device: bridgeDevice,
@@ -264,6 +265,23 @@ function discBridge() {
 const knownDevices = new Map(); // id -> {id,name,type}
 const camOnline = new Map(); // id -> { name, online }  (cameras only, for the offline aggregate)
 let doorbellIds = new Set();
+
+// Persist per-camera "offline since" (epoch seconds) across add-on restarts so
+// the reported duration reflects the true outage, not the last restart.
+const STATE_FILE = '/data/offline_since.json';
+let offlineSince = {};
+try {
+  offlineSince = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) || {};
+} catch (e) {
+  offlineSince = {};
+}
+function saveOfflineSince() {
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(offlineSince));
+  } catch (e) {
+    log('warning', `persist offline_since: ${e.message}`);
+  }
+}
 
 function buildDeviceDiscovery(d, p) {
   if (d.type === 'cam') {
@@ -332,7 +350,17 @@ async function buildDiscovery() {
 // ---------- state ----------
 function publishAll(dev, p) {
   if (dev.type === 'cam' && 'isOnline' in p) {
-    camOnline.set(dev.id, { name: dev.name, online: !!p.isOnline });
+    const online = !!p.isOnline;
+    camOnline.set(dev.id, { name: dev.name, online });
+    if (!online && !EXCLUDE.has(dev.name)) {
+      if (!offlineSince[dev.id]) {
+        offlineSince[dev.id] = Math.floor(Date.now() / 1000);
+        saveOfflineSince();
+      }
+    } else if (offlineSince[dev.id]) {
+      delete offlineSince[dev.id];
+      saveOfflineSince();
+    }
   }
   for (const [k, v] of Object.entries(p)) {
     if (META.has(k)) continue;
@@ -345,12 +373,17 @@ function publishAll(dev, p) {
 }
 
 function publishOfflineAggregate() {
-  const offline = [...camOnline.values()]
-    .filter((c) => !c.online && !EXCLUDE.has(c.name))
-    .map((c) => c.name)
-    .sort();
+  const offline = [...camOnline.entries()]
+    .filter(([, c]) => !c.online && !EXCLUDE.has(c.name))
+    .map(([id, c]) => ({
+      name: c.name,
+      since: offlineSince[id] || null,
+      since_iso: offlineSince[id] ? new Date(offlineSince[id] * 1000).toISOString() : null,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   pub(`${NS}/bridge/camerasOffline`, offline.length > 0 ? 'true' : 'false');
-  pub(`${NS}/bridge/offlineList`, offline.length ? offline.join(', ') : 'none');
+  pub(`${NS}/bridge/offlineList`, offline.length ? offline.map((c) => c.name).join(', ') : 'none');
+  pub(`${NS}/bridge/offlineAttrs`, JSON.stringify({ count: offline.length, cameras: offline }));
 }
 
 async function refreshDevice(id) {
